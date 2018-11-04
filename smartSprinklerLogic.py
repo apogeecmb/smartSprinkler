@@ -1,9 +1,6 @@
 import time # time module
 import json
 from enum import IntEnum
-from weatherPredict import WeatherPredict, WundergroundPredict
-from pwsInterface import PWSInterface, WeeWXInterface
-from sprinklerInterface import SprinklerInterface, OSPiInterface
 
 class SSStatus(IntEnum):
     Requirement_Met = 0
@@ -13,8 +10,6 @@ class SSStatus(IntEnum):
     Delayed_Half_Met = 4 
     Unavailable = 5
     Forced_Run = 6
-
-url = "http://127.0.0.1:9000/cp?pw=ospi"
 
 class SmartSprinklerConfig(dict):
     def __init__(self, settings):
@@ -28,6 +23,7 @@ class SmartSprinklerConfig(dict):
         if ("pws" in self): # Validate PWS config
             try:
                 if (self["pws"]["type"].lower() == "weewx"): # weeWX PWS
+                    from weewxInterface import WeeWXInterface
                     self.pws = WeeWXInterface(self["pws"]["weatherDbFile"])
                 else:
                     self.pws = None
@@ -40,7 +36,8 @@ class SmartSprinklerConfig(dict):
         if ("sprinklerInterface" in self): # Validate sprinkler interface config
             try:
                 if (self["sprinklerInterface"]["type"].lower() == "ospi"): # OSPi
-                    self.sprinklerInterface = OSPiInterface(self["sprinklerInterface"]["url"])
+                    from openSprinklerInterface import OSPiInterface
+                    self.sprinklerInterface = OSPiInterface(self["sprinklerInterface"]["url"], len(self["zones"]), self["sprinklerInterface"]["pw"])
                 else:
                     self.sprinklerInterface = None
             except:
@@ -52,6 +49,7 @@ class SmartSprinklerConfig(dict):
         if ("weatherPredict" in self): # Validate weather predict config
             try:
                 if (self["weatherPredict"]["type"].lower() == "wunderground"): # Wunderground
+                    from wundergroundPredict import WundergroundPredict
                     self.weatherPredict = WundergroundPredict(self["weatherPredict"]["url"])
                 else:
                     self.weatherPredict = None
@@ -90,7 +88,7 @@ def scheduleWateringDay(totalRain, weeklyWaterReq):
    return 1
 
    
-def getWateringUpdate(zone, amountOfWater, lstTimeWater, weeklyWaterReq, config, startTime, endTime, runNow, precipProb): 
+def getWateringUpdate(zone, amountOfWater, lastTimeWater, weeklyWaterReq, config, startTime, endTime, runNow, precipProb): 
 # Calculate watering needs based on water to date and predicted weather
 
     ## Calculate next watering day

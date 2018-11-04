@@ -1,0 +1,33 @@
+from pwsInterface import PWSInterface
+import sqlite3 # sqlite3 module
+
+class WeeWXInterface(PWSInterface):
+    
+    def getRainfall(self, startTime, endTime, minRainAmount):
+        rainfall = 0.0
+        lastDayOfRain = 0
+
+        # Open connection to stats database
+        conn = sqlite3.connect(self.path) 
+
+        c = conn.cursor() # cursor to operate on database
+
+        # Get rainfall table from database
+        #c.execute('SELECT * FROM rain')
+        c.execute('SELECT * FROM archive_day_rain WHERE dateTime BETWEEN ? AND ?', (startTime, endTime))
+
+        rainTable = c.fetchall()
+
+        # Compute total rainfall between start and end times
+        #for i in range(startIndex, endIndex + 1):
+        for i in range(len(rainTable)):
+            if rainTable[i][5] > 0:
+                rainfall += rainTable[i][5]
+                if rainTable[i][5] > minRainAmount: # minimum rain amount to count as "rain day"
+                    lastDayOfRain = rainTable[i][0]
+
+        conn.close()
+        
+        
+        return rainfall, lastDayOfRain 
+
