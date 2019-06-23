@@ -16,7 +16,6 @@ class WundergroundPredict(WeatherPredict):
             #f = request.urlopen(self.path + str(location) + '.json')
             f = requests.get(self.path + str(location) + '.json')
         except: # failed to get weather forecast
-            print("In here2")
             return [] 
 
         # Parse json

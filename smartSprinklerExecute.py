@@ -16,9 +16,10 @@ def execute(settings=[], settingsFile=[], sprinklerLog=[]):
     config = SmartSprinklerConfig(settings)
     weeklyWaterReq = config['weeklyWaterReq']
 
-    # Determine important times
-    currentTime = int(time.time())
-    epochTimeMidnight = (currentTime - (currentTime - time.altzone)%86400) # epoch time of midnight (correcting for timezone)
+    # Determine important times (does not account for DST)
+    currentTime = int(time.time()) # UTC time in linux epoch
+    epochTimeMidnight = math.floor(currentTime) - time.altzone # epoch time of midnight in current time zone
+    #epochTimeMidnight = (currentTime - (currentTime - time.altzone)%86400) # epoch time of midnight (correcting for timezone)
     currentDayOfWeek = int(time.strftime("%w")) # day of week 
     epochTimeBeginWeek = epochTimeMidnight - currentDayOfWeek*86400 # start week on Sunday
     epochTimeEndWeek = epochTimeBeginWeek+86400*7 - 30 # subtraction ensures end time is part of same week
@@ -57,7 +58,7 @@ def execute(settings=[], settingsFile=[], sprinklerLog=[]):
 
     # Total water by zone (rainfall and sprinklers)
     totalWater = [rainfall + sprinklerTable[config['zones'][i]]['totalRunTime']/60.0*config['zoneWateringRate'][i] for i in range(len(config['zones']))]
-
+    
     # Check for time since last rain or water
     if (timeRainLastWeek > lastTimeOfRain): # no rain this week, but rained last 
         lastTimeOfRain = timeRainLastWeek

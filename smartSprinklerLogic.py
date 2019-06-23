@@ -51,6 +51,9 @@ class SmartSprinklerConfig(dict):
                 if (self["weatherPredict"]["type"].lower() == "wunderground"): # Wunderground
                     from wundergroundPredict import WundergroundPredict
                     self.weatherPredict = WundergroundPredict(self["weatherPredict"]["url"])
+                elif (self["weatherPredict"]["type"].lower() == "nws"): # National Weather Service
+                    from nwsPredict import NWSPredict
+                    self.weatherPredict = NWSPredict(self["weatherPredict"]["url"])
                 else:
                     self.weatherPredict = None
             except:
