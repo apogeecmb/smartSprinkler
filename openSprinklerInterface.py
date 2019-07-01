@@ -18,7 +18,6 @@ class OSPiInterface(SprinklerInterface):
         self.programFlag = 65 # enabled, weekday program schedule, fixed start time
 
     def getSprinklerTotals(self, logFile, zones, startTime, endTime=time.time(), log=[]):
-        startTime = endTime - 10*86400
         # Initialize output
         runTimes = dict()
         for zone in zones:
@@ -28,7 +27,7 @@ class OSPiInterface(SprinklerInterface):
         log_r = requests.get(self.path + "jl", params = {'pw': self.pw, 'start': str(int(startTime)), 'end': str(int(endTime))})
         
         logEntries = log_r.json()
-
+        
         # Parse and format log entries
         for entry in logEntries:
             zone = entry[1] + 1
@@ -58,7 +57,7 @@ class OSPiInterface(SprinklerInterface):
 
         # Issue program change call to OpenSprinkler using HTTP API
         r_changeProgram = requests.get(self.path + "cp", params = {'pid': str(zoneId), 'name': "Zone" + str(zoneNum), 'pw': self.pw, 'v': progSettings})
-        
+        print(r_changeProgram)
 
     def disableProgram(self, zoneNum):
         zoneId = self.getZoneId(zoneNum) 

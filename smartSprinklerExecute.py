@@ -18,8 +18,7 @@ def execute(settings=[], settingsFile=[], sprinklerLog=[]):
 
     # Determine important times (does not account for DST)
     currentTime = int(time.time()) # UTC time in linux epoch
-    epochTimeMidnight = math.floor(currentTime) - time.altzone # epoch time of midnight in current time zone
-    #epochTimeMidnight = (currentTime - (currentTime - time.altzone)%86400) # epoch time of midnight (correcting for timezone)
+    epochTimeMidnight = (currentTime - (currentTime - time.altzone)%86400) # epoch time of midnight (correcting for timezone)
     currentDayOfWeek = int(time.strftime("%w")) # day of week 
     epochTimeBeginWeek = epochTimeMidnight - currentDayOfWeek*86400 # start week on Sunday
     epochTimeEndWeek = epochTimeBeginWeek+86400*7 - 30 # subtraction ensures end time is part of same week
