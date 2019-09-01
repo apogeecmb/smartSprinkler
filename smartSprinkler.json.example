@@ -1,0 +1,40 @@
+{
+	"zones": [1, 2, 3, 4],
+    "zoneWateringRate": [0.025, 0.020, 0.016, 0.020],
+	"weeklyWaterReq": [0.25, 1.0, 1.0, 1.0],
+	"averagePeriodWeeks": 2,
+	"minWateringLength": [180, 300, 300, 300],
+	"maxWateringLength": [600, 3600, 3600, 3600],
+	"minPrecipProb": 6666660,
+	"minDaysBetweenWater": 5,
+	"maxDaysBetweenWater": 14,
+    "minRainAmount": 0.1,
+	"sprinklerLogFile": "/home/pi/OSPi/data/log.json",
+	"logFile": "PATH_TO_OUTPUT_LOGFILE",
+	"statusFile": "PATH_TO_CURRENT_STATUS_FILE",
+	"location": [LATITUDE, LONGITUDE, ZIP_CODE, "US/Central"],
+	"desiredRunTimeOfDay": ["sunrise -02:00", "sunset +00:00"],
+	"catchup": true,
+	"excessRollover": true,
+
+    "pws": {
+        "type": "weewx",
+        "weatherDbFile": "PATH_TO_WEEWX_DATABASE_FILE"
+    },
+
+    "weatherPredict": {
+        "type": "nws"
+    },
+
+    "sprinklerInterface": {
+        "type": "ospi",
+        "url": "URL_TO_SPRINKLER_INTERFACE",
+	    "pw": "PASSWORD"
+    },
+    
+    "reportInterface": {
+	"type": "ifttt",
+        "key": "PERSONAL_KEY"
+    }
+        
+}
