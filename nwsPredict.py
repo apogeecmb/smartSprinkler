@@ -1,7 +1,7 @@
 from weatherPredict import WeatherPredict
 import time, datetime, requests
 import xml.etree.ElementTree as ET
-from exceptions import ModuleException, PredictException
+from exceptions import ModuleException, BasicException
 
 class NWSPredict(WeatherPredict):
 # National Weather Service Digital Forecast Database REST Web Service Interface
@@ -34,7 +34,7 @@ class NWSPredict(WeatherPredict):
                 
                 if (r.ok == False):
                     message = "NWSPredict - Unable to get predict information."
-                    raise PredictException(message)
+                    raise BasicException(message)
                     
             # Parse xml
             root = ET.fromstring(r.text)

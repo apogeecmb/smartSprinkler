@@ -4,7 +4,7 @@ import json
 import math
 from enum import IntEnum
 from astral import Location
-from exceptions import ModuleException, PredictException
+from exceptions import ModuleException, BasicException
 
 class SSStatus(IntEnum):
     Requirement_Met = 0
@@ -17,8 +17,11 @@ class SSStatus(IntEnum):
 
 class SmartSprinklerConfig(dict):
     def __init__(self, settings):
-        self.loadConfig(settings)
-
+        
+        try:
+            self.loadConfig(settings)
+        except Exception as err:
+            raise err
 
     def loadConfig(self, settings):
         self.update(settings)
@@ -29,14 +32,15 @@ class SmartSprinklerConfig(dict):
         # Check config
         if ("pws" in self): # Validate PWS config
             try:
+                blah
                 if (self["pws"]["type"].lower() == "weewx"): # weeWX PWS
                     from weewxInterface import WeeWXInterface
                     self.pws = WeeWXInterface(self["pws"]["weatherDbFile"])
                 else:
                     self.pws = None
-            except:
-                print("Error experienced while loading PWS information")
-                raise
+            except Exception as e:
+                message = "SmartSprinklerConfig - Error experienced while loading PWS information, of type " + type(e).__name__
+                raise ModuleException(message, e, None)
         else:
             self.pws = None
 
@@ -47,9 +51,9 @@ class SmartSprinklerConfig(dict):
                     self.sprinklerInterface = OSPiInterface(self["sprinklerInterface"]["url"], len(self["zones"]), self["sprinklerInterface"]["pw"])
                 else:
                     self.sprinklerInterface = None
-            except:
-                print("Error experienced while loading sprinkler interface information")
-                raise
+            except Exception as e:
+                message = "SmartSprinklerConfig - Error experienced while loading sprinkler interface information, of type " + type(e).__name__
+                raise ModuleException(message, e, None)
         else:
             self.sprinklerInterface = None
         
@@ -63,9 +67,9 @@ class SmartSprinklerConfig(dict):
                     self.weatherPredict = NWSPredict()
                 else:
                     self.weatherPredict = None
-            except:
-                print("Error experienced while loading weather predict information")
-                raise
+            except Exception as e:
+                message = "SmartSprinklerConfig - Error experienced while loading weather predict interface information, of type " + type(e).__name__
+                raise ModuleException(message, e, None)
         else:
             self.weatherPredict = None
 
@@ -76,9 +80,9 @@ class SmartSprinklerConfig(dict):
                     self.reportInt = IFTTTInterface(self["reportInterface"]["key"])
                 else:
                     self.reportInt = None
-            except:
-                print("Error experienced while loading report interface information")
-                raise
+            except Exception as e:
+                message = "SmartSprinklerConfig - Error experienced while loading report interface interface information, of type " + type(e).__name__
+                raise ModuleException(message, e, None)
         else:
             self.reportInt = None
 
@@ -175,7 +179,7 @@ class SmartSprinkler(object):
         if (self.config.weatherPredict):
             try:    
                 precipProb = self.config.weatherPredict.getPrecipProb(currentTime, epochTimeEndWeek, self.config['location']['zipcode'])
-            except PredictException as err:
+            except BasicException as err:
                 nonFatalException = err # store exception and continue    
             except ModuleException as err:
                 raise err
