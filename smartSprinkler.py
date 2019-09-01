@@ -32,7 +32,6 @@ class SmartSprinklerConfig(dict):
         # Check config
         if ("pws" in self): # Validate PWS config
             try:
-                blah
                 if (self["pws"]["type"].lower() == "weewx"): # weeWX PWS
                     from weewxInterface import WeeWXInterface
                     self.pws = WeeWXInterface(self["pws"]["weatherDbFile"])
@@ -212,7 +211,7 @@ class SmartSprinkler(object):
         if any(length > 0 for length in wateringLength): # Watering required by at least one zone
             # Sort by run times
             sortedRuns = sorted(runData, key=lambda tup: tup[0])    
-            print(sortedRuns)
+            #print(sortedRuns)
             # Check for run time conflicts
             for i in range(1,len(sortedRuns)):
                 for j in range(0,i):

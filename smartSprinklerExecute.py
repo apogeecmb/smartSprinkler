@@ -1,6 +1,6 @@
 from smartSprinkler import SmartSprinkler
 import time 
-import json
+import yaml
 import sys
 from exceptions import ModuleException
 
@@ -8,10 +8,10 @@ def execute(settings=[], settingsFile=[], sprinklerLog=[]):
     ### Load config
     if (settingsFile):
         with open(settingsFile) as f:
-            settings = json.load(f)
+            settings = yaml.load(f, Loader=yaml.Loader)
     elif (not settings):    
-        # error
-        pass
+        print("SmartSprinklerExecute - No settings provided. Exiting.")
+        sys.exit()
 
     try:     
         smartSprinkler = SmartSprinkler(settings)

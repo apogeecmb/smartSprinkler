@@ -57,7 +57,7 @@ class OSPiInterface(SprinklerInterface):
 
         # Issue program change call to OpenSprinkler using HTTP API
         r_changeProgram = requests.get(self.path + "cp", params = {'pid': str(zoneId), 'name': "Zone" + str(zoneNum), 'pw': self.pw, 'v': progSettings})
-        print(r_changeProgram)
+        #print(r_changeProgram)
 
     def disableProgram(self, zoneNum):
         zoneId = self.getZoneId(zoneNum) 

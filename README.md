@@ -2,6 +2,9 @@
 
 ## Release notes
 
+### v0.5.1:
+- Changed configuration file format to YAML.
+
 ### v0.5:
 - Added National Weather Service Digital Forecast Database REST Web Service Interface.
 - Deprecated Weather Underground API due to changes after purchase of Wunderground by IBM.
