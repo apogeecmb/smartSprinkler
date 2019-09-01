@@ -1,6 +1,8 @@
 import time # time module
+import datetime
 import json
 from enum import IntEnum
+from astral import Location
 
 class SSStatus(IntEnum):
     Requirement_Met = 0
@@ -18,6 +20,9 @@ class SmartSprinklerConfig(dict):
 
     def loadConfig(self, settings):
         self.update(settings)
+
+        # Location
+        self['location'] = {'lat': self['location'][0], 'lon': self['location'][1], 'zipcode': self['location'][2], 'timezone': self['location'][3]}
 
         # Check config
         if ("pws" in self): # Validate PWS config
@@ -62,18 +67,69 @@ class SmartSprinklerConfig(dict):
         else:
             self.weatherPredict = None
 
-def determineRunTime(desiredRunTimes, runDayEpoch):
+        if ("reportInterface" in self): # Validate report interface config
+            try:
+                if (self["reportInterface"]["type"].lower() == "ifttt"): # IFTTT reporting
+                    from iftttInterface import IFTTTInterface
+                    self.reportInt = IFTTTInterface(self["reportInterface"]["key"])
+                else:
+                    self.reportInt = None
+            except:
+                print("Error experienced while loading report interface information")
+                raise
+        else:
+            self.reportInt = None
+
+def calculateSunRiseAndSet(location):
+    # Create location
+    loc = Location(('Home', 'Alabama', location['lat'], location['lon'], location['timezone'], 0))
+    sun = loc.sun()
+
+    # Convert datetime to seconds of day
+    now = datetime.datetime.now()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    sunrise = (sun['sunrise'].replace(tzinfo=None) - midnight).seconds
+    sunset = (sun['sunset'].replace(tzinfo=None) - midnight).seconds
+ 
+    return sunrise, sunset
+
+def determineRunTime(desiredRunTimes, runDayEpoch, settings, timeChoice='first'):
+    # Input desiredRunTimes are assumed to be monotonically increasing
     epochTimeMidnight = int(runDayEpoch)
     currentTime = time.time()
     
-    runTime = []
     for rtime in desiredRunTimes:
-        timeOfDay = rtime.split(":")
-        timeOfDaySec = int(timeOfDay[0])*60*60 + int(timeOfDay[1])*60
+        timeEntries = rtime.split()
+        if (len(timeEntries) == 2): # relative time
+            # Calculate offset
+            offsetSign = timeEntries[1][0] # negative or positive offset
+            offset = timeEntries[1][1:].split(":")
+            offset = int(offsetSign + str(int(offset[0])*60*60 + int(offset[1])*60))
+            
+            # Calculate sunset and sunrise times
+            sunrise, sunset = calculateSunRiseAndSet(settings['location'])
+
+            # Apply offset to base
+            if (timeEntries[0] == 'sunrise'):
+                # Add offset to sunrise time
+                timeOfDaySec = sunrise + offset
+            elif (timeEntries[0] == 'sunset'):
+                # Add offset to sunset time
+                timeOfDaySec = sunset + offset
+            else: # invalid base
+                # TODO - raise exception
+                print("Invalid time offset base")
+                continue # just skip this time for now
+        
+        else: # absolute time
+            timeOfDay = rtime.split(":")
+            timeOfDaySec = int(timeOfDay[0])*60*60 + int(timeOfDay[1])*60
     
-        if currentTime < (epochTimeMidnight + timeOfDaySec): # can run at this time     
+        # Check if time has already passed 
+        if (currentTime < (epochTimeMidnight + timeOfDaySec)): # can run at this time
             runTime = epochTimeMidnight + timeOfDaySec
-            break
+            if (timeChoice == 'first'): # looking for first valid run time
+                break
 
     if not runTime: # desired times already passed
         # Run tomorrow
@@ -99,6 +155,7 @@ def getWateringUpdate(zone, amountOfWater, lastTimeWater, weeklyWaterReq, config
     amountToWater = -1
     status = SSStatus.Requirement_Met
     runTime = -1
+    timeChoice = 'first'
 
     # Check if water requirement met
     if amountOfWater > 0.9*weeklyWaterReq: # within 10% of requirement
@@ -123,6 +180,7 @@ def getWateringUpdate(zone, amountOfWater, lastTimeWater, weeklyWaterReq, config
             nextDayToWater = waterTime - (waterTime - time.altzone)%86400 # midnight of day to water
             amountToWater = weeklyWaterReq - amountOfWater
             status = SSStatus.Forced_Run
+            timeChoice = 'last' # use last available run time of day for forced runs
             running = True
         elif len(daysOfRain) > 0: # Rain predicted
             print("Rain predicted")
@@ -156,7 +214,7 @@ def getWateringUpdate(zone, amountOfWater, lastTimeWater, weeklyWaterReq, config
             running = True
 
         if (running): # determine run time
-            runTime = determineRunTime(config['desiredRunTimeOfDay'], nextDayToWater)
+            runTime = determineRunTime(config['desiredRunTimeOfDay'], nextDayToWater, config, timeChoice)
 
     return nextDayToWater, amountToWater, status, runTime
 
@@ -166,9 +224,21 @@ def logStatus(logfile, statusfile, status, runData, totalWater, lastTimeWater):
     # Log to cumulative log file
     try:
         with open(logfile, "a") as f:
-            f.write("\n" + timestamp + " - " + "Status: " + str(status) + ", Scheduled runs (start time, program number, zone, length): " + str(runData) + ", Total water: " + str(totalWater) + ", Last time water: " + str(lastTimeWater))
+            # Format data for log entry
+            statusOut = []
+            for zone in status:
+                statusOut.append(str(zone))
+            runDataOut = []
+            for zone in runData:
+                timeStr = time.strftime("%H:%M:%S %m-%d-%Y", time.localtime(zone[0]))
+                runDataOut.append([timeStr, zone[1], zone[2]])
+
+            # Write entry to log
+            logEntry = timestamp + " - " + "Status: " + str(statusOut) + ", Scheduled runs (start time, program number, zone, length): " + str(runDataOut) + ", Total water: " + str(totalWater) + ", Last time water: " + str(lastTimeWater)
+            f.write("\n" + logEntry)
+            return logEntry
     except:
-        pass    
+        return None
     
     # Log to current status file
     try:

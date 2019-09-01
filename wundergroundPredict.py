@@ -2,6 +2,8 @@ from weatherPredict import WeatherPredict
 import requests
 
 class WundergroundPredict(WeatherPredict):
+# DEPRECATED: Weather Underground API has been deprecated due to purchase of Wunderground by IBM. 
+
     def getPrecipProb(self, startTime, endTime, location):
     # Get precipitation probability for desired period
     # Inputs:
