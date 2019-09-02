@@ -17,7 +17,7 @@ class OSPiInterface(SprinklerInterface):
         # Sprinkler program settings
         self.programFlag = 65 # enabled, weekday program schedule, fixed start time
 
-    def getSprinklerTotals(self, logFile, zones, startTime, endTime=time.time(), log=[]):
+    def getSprinklerTotals(self, zones, startTime, endTime=time.time(), log=[]):
         # Initialize output
         runTimes = dict()
         for zone in zones:

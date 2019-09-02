@@ -5,7 +5,7 @@ class SprinklerInterface:
         self.path = path
         self.numZones = numZones
 
-    def getSprinklerTotals(logFile, zones, startTime, endTime=time.time(), log=[]):
+    def getSprinklerTotals(zones, startTime, endTime=time.time(), log=[]):
         pass
     
     def updateProgram(self, zoneNum, durationSec, runTimeEpoch):

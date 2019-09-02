@@ -139,8 +139,8 @@ class SmartSprinkler(object):
         # Calculate sprinkler time this week
         if (self.config.sprinklerInterface):
             #syslog.syslog("sprinkler total lookup time:" + str(epochTimeBeginWeek))
-            sprinklerTable = self.config.sprinklerInterface.getSprinklerTotals(self.config['sprinklerLogFile'],self.config['zones'],epochTimeBeginWeek, log=sprinklerLog)
-            lastSprinklerTable = self.config.sprinklerInterface.getSprinklerTotals(self.config['sprinklerLogFile'],self.config['zones'],startLastWeek,epochTimeBeginWeek, log=sprinklerLog)
+            sprinklerTable = self.config.sprinklerInterface.getSprinklerTotals(self.config['zones'],epochTimeBeginWeek, log=sprinklerLog)
+            lastSprinklerTable = self.config.sprinklerInterface.getSprinklerTotals(self.config['zones'],startLastWeek,epochTimeBeginWeek, log=sprinklerLog)
         else:
             sprinklerTable = dict()
             for zone in zones:
