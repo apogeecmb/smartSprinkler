@@ -29,10 +29,10 @@ def execute(settings=[], settingsFile=[], sprinklerLog=[]):
         # Report error
         errString = err.message + ": " + str(err.exception) + "\nTraceback: " + str(err.traceback)
         print(errString)
-        if (smartSprinkler.config.reportInt):
+        if (smartSprinkler.config['reportEnable'] > 0 and smartSprinkler.config.reportInt):
             smartSprinkler.config.reportInt.post({'name': "smartSprinkler_error", 'data': [errString]})
     except Exception as err:
         errString = "An unexpected error of type " + type(err).__name__ + " occurred: " + str(err)
         print(errString)
-        if (smartSprinkler.config.reportInt):
+        if (smartSprinkler.config['reportEnable'] > 0 and smartSprinkler.config.reportInt):
             smartSprinkler.config.reportInt.post({'name': "smartSprinkler_error", 'data': [errString]})

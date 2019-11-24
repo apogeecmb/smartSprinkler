@@ -3,6 +3,8 @@ from reportInterface import ReportInterface
 
 class IFTTTInterface(ReportInterface):
     def __init__(self, key):
+        super().__init__()
+
         self.key = key
         self.url = "https://maker.ifttt.com/trigger/"
     

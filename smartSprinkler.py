@@ -15,6 +15,11 @@ class SSStatus(IntEnum):
     Unavailable = 5
     Forced_Run = 6
 
+class ReportEnable(IntEnum):
+    Disable = 0
+    ErrorOnly = 1
+    ErrorAndStatus = 2
+
 class SmartSprinklerConfig(dict):
     def __init__(self, settings):
         
@@ -121,10 +126,13 @@ class SmartSprinkler(object):
         ### Get watering/rain statistics
         # Calculate total rain this week and last
         if (self.config.pws):
-            # Get rainfall total this week
-            rainfall, lastTimeOfRain = self.config.pws.getRainfall(epochTimeBeginWeek, epochTimeEndWeek, self.config['minRainAmount'])
-            # Get rainfall total for previous week 
-            lastWeekRain, timeRainLastWeek = self.config.pws.getRainfall(startLastWeek, epochTimeBeginWeek, self.config['minRainAmount'])
+            try:
+                # Get rainfall total this week
+                rainfall, lastTimeOfRain = self.config.pws.getRainfall(epochTimeBeginWeek, epochTimeEndWeek, self.config['minRainAmount'])
+                # Get rainfall total for previous week 
+                lastWeekRain, timeRainLastWeek = self.config.pws.getRainfall(startLastWeek, epochTimeBeginWeek, self.config['minRainAmount'])
+            except ModuleException as err: # fatal error
+                raise err
         else:
             rainfall = 0.0
             lastTimeOfRain = 0.0
@@ -234,48 +242,58 @@ class SmartSprinkler(object):
         logEntry = self.logStatus(self.config['logFile'], self.config['statusFile'], status, runData, totalWater, lastTimeWater)
         
         # Report status
-        if (self.config.reportInt):
+        if (self.config.reportInt and self.config['reportEnable'] != ReportEnable.Disable):
             print(logEntry)
             if (nonFatalException): # exception occurred during execution
                 exceptionStr = nonFatalException.message
             else:
+                if (self.config['reportEnable'] == ReportEnable.ErrorOnly):
+                    return # Status only reports disabled 
+
                 exceptionStr = 'No exceptions occurred.'
+
             self.config.reportInt.post({'name': "smartSprinkler_status", 'data': [logEntry, exceptionStr]})
+
+    def calculateRunTime(self, timeEntries, settings):
+        """Converts inputted run time to a time of day in seconds."""
+        if (len(timeEntries) == 2): # relative time
+            # Calculate offset
+            offsetSign = timeEntries[1][0] # negative or positive offset
+            offset = timeEntries[1][1:].split(":")
+            offset = int(offsetSign + str(int(offset[0])*60*60 + int(offset[1])*60))
+            
+            # Calculate sunset and sunrise times
+            sunrise, sunset = calculateSunRiseAndSet(settings['location'])
+
+            # Apply offset to base
+            if (timeEntries[0] == 'sunrise'):
+                # Add offset to sunrise time
+                timeOfDaySec = sunrise + offset
+            elif (timeEntries[0] == 'sunset'):
+                # Add offset to sunset time
+                timeOfDaySec = sunset + offset
+            else: # invalid base
+                # TODO - raise exception
+                print("Invalid time offset base")
+                return None
+        else: # absolute time
+            timeOfDay = rtime.split(":")
+            timeOfDaySec = int(timeOfDay[0])*60*60 + int(timeOfDay[1])*60
+        
+        return timeOfDaySec
 
     def determineRunTime(self, desiredRunTimes, runDayEpoch, settings, timeChoice='first'):
         # Input desiredRunTimes are assumed to be monotonically increasing
         epochTimeMidnight = int(runDayEpoch)
         currentTime = time.time()
-    
+        runTime = None   
+ 
         for rtime in desiredRunTimes:
             timeEntries = rtime.split()
-            if (len(timeEntries) == 2): # relative time
-                # Calculate offset
-                offsetSign = timeEntries[1][0] # negative or positive offset
-                offset = timeEntries[1][1:].split(":")
-                offset = int(offsetSign + str(int(offset[0])*60*60 + int(offset[1])*60))
-            
-                # Calculate sunset and sunrise times
-                sunrise, sunset = calculateSunRiseAndSet(settings['location'])
-
-                # Apply offset to base
-                if (timeEntries[0] == 'sunrise'):
-                    # Add offset to sunrise time
-                    timeOfDaySec = sunrise + offset
-                elif (timeEntries[0] == 'sunset'):
-                    # Add offset to sunset time
-                    timeOfDaySec = sunset + offset
-                else: # invalid base
-                    # TODO - raise exception
-                    print("Invalid time offset base")
-                    continue # just skip this time for now
-        
-            else: # absolute time
-                timeOfDay = rtime.split(":")
-                timeOfDaySec = int(timeOfDay[0])*60*60 + int(timeOfDay[1])*60
+            timeOfDaySec = self.calculateRunTime(timeEntries, settings)
     
             # Check if time has already passed 
-            if (currentTime < (epochTimeMidnight + timeOfDaySec)): # can run at this time
+            if (timeOfDaySec and currentTime < (epochTimeMidnight + timeOfDaySec)): # can run at this time
                 runTime = epochTimeMidnight + timeOfDaySec
                 if (timeChoice == 'first'): # looking for first valid run time
                     break
@@ -283,9 +301,13 @@ class SmartSprinkler(object):
         if not runTime: # desired times already passed
             # Run tomorrow
             timeOfDay = desiredRunTimes[0].split(":")
-            timeOfDaySec = int(timeOfDay[0])*60*60 + int(timeOfDay[1])*60
+            for rtime in desiredRunTimes:
+                timeEntries = rtime.split()
+                timeOfDaySec = self.calculateRunTime(timeEntries, settings)
+                if (timeOfDaySec):
+                    break
             runTime = epochTimeMidnight + 86400 + timeOfDaySec
-
+        
         return int(runTime)
 
     def getWateringUpdate(self, zone, amountOfWater, lastTimeWater, weeklyWaterReq, config, startTime, endTime, runNow, precipProb): 
@@ -300,9 +322,9 @@ class SmartSprinkler(object):
 
         # Check if water requirement met
         if amountOfWater > 0.9*weeklyWaterReq: # within 10% of requirement
-            print("Water requirement met.")
+            print("Water requirement met for zone {}.".format(zone+1))
         else:
-            print("Water requirement not met. Determining next day to water.")
+            print("Water requirement not met for zone {}. Determining next day to water.".format(zone+1))
    
             # Get precipitation forecast (for remainder of week)
             #precipProb = getPrecipProb(startTime, endTime, config['location'])
@@ -312,7 +334,7 @@ class SmartSprinkler(object):
             for i in range(len(precipProb)):
                 if precipProb[i][1] >= config['minPrecipProb']:
                     daysOfRain.append(precipProb[i])
-            print("Days of rain:", daysOfRain)
+            #print("Days of rain:", daysOfRain)
 
             running = False
             if (runNow):
@@ -324,7 +346,7 @@ class SmartSprinkler(object):
                 timeChoice = 'last' # use last available run time of day for forced runs
                 running = True
             elif len(daysOfRain) > 0: # Rain predicted
-                print("Rain predicted")
+                #print("Rain predicted")
                 if (daysOfRain[0][0] - lastTimeWater) <= config['maxDaysBetweenWater']*86400:  # Delay watering
                     print("Delaying watering because rain is predicted before the maximum allowable days without water is exceeded.")
                     status = SSStatus.Delayed
@@ -342,7 +364,7 @@ class SmartSprinkler(object):
                         status = SSStatus.Reduced_Watering
                         running = True
             else: # Rain not predicted so run sprinklers
-                print("Rain not predicted")
+                #print("Rain not predicted")
                 waterTime = min(endTime, lastTimeWater + config['maxDaysBetweenWater']*86400)  
             
                 # Check for watering times in the past
@@ -353,7 +375,7 @@ class SmartSprinkler(object):
                 amountToWater = weeklyWaterReq - amountOfWater
                 status = SSStatus.Watering
                 running = True
-
+            
             if (running): # determine run time
                 runTime = self.determineRunTime(config['desiredRunTimeOfDay'], nextDayToWater, config, timeChoice)
 

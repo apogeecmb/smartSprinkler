@@ -8,6 +8,8 @@ from subprocess import call
 
 class OSPiInterface(SprinklerInterface):
     # Interface to OpenSprinkler per Firmware 2.1.8 API (May 25, 2018)
+    # https://openthings.freshdesk.com/support/solutions/articles/5000716363-os-api-documents
+
     def __init__(self, path, numZones, pw):
         super().__init__(path, numZones)
 

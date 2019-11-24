@@ -19,7 +19,6 @@ class NWSPredict(WeatherPredict):
     #
     # Outputs:
     # precipProb- array of epoch time and and chance of precipitation for every day between start and end times
-
         try:
             # Pull forecast data from source server
             beginTimeString = datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%dT%H:%M:%S') 
@@ -37,7 +36,12 @@ class NWSPredict(WeatherPredict):
                     raise BasicException(message)
                     
             # Parse xml
-            root = ET.fromstring(r.text)
+            try: 
+                root = ET.fromstring(r.text)
+            except ET.ParseError as e: # badly formed XML from NWS
+                message = "NWSPredict - Badly formed XML received from NWS."
+                raise BasicException(message)
+                
             data = root.find('data')
             times = data.findall('time-layout') # start and end times
             params = data.find('parameters')
@@ -104,7 +108,6 @@ class NWSPredict(WeatherPredict):
             import traceback
             tb = traceback.format_exc()
 
-            print("In NWSPredict exception handling")
             message = "NWSPredict - An error occurred of type " + type(e).__name__
             raise ModuleException(message, e, tb)
         

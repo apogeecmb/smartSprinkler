@@ -1,7 +1,9 @@
 import yaml
 from smartSprinklerExecute import execute
 
-with open("/home/pi/smartSprinkler/smartSprinkler.yaml") as f:
+with open("smartSprinkler/smartSprinkler.yaml") as f:
     config = yaml.load(f, Loader=yaml.Loader)
-	
-execute(settings=config)
+
+# Execute SmartSprinkler logic
+if (config['enable'] == True): 	
+    execute(settings=config)
