@@ -2,9 +2,7 @@ from sprinklerInterface import SprinklerInterface
 import time
 import requests
 import hashlib
-import ast
-import syslog
-from subprocess import call
+from exceptions import ModuleException, BasicException
 
 class OSPiInterface(SprinklerInterface):
     # Interface to OpenSprinkler per Firmware 2.1.8 API (May 25, 2018)
@@ -19,7 +17,7 @@ class OSPiInterface(SprinklerInterface):
         # Sprinkler program settings
         self.programFlag = 65 # enabled, weekday program schedule, fixed start time
 
-    def getSprinklerTotals(self, zones, startTime, endTime=time.time(), log=[]):
+    def getSprinklerTotals(self, zones, startTime, endTime, log=[]):
         # Initialize output
         runTimes = dict()
         for zone in zones:
@@ -27,18 +25,28 @@ class OSPiInterface(SprinklerInterface):
    
         # Retrieve log from OSPi
         log_r = requests.get(self.path + "jl", params = {'pw': self.pw, 'start': str(int(startTime)), 'end': str(int(endTime))})
-        
+        # TODO put in result processing based on API information - need to check if json response or requested array of log times
         logEntries = log_r.json()
         
         # Parse and format log entries
         for entry in logEntries:
-            zone = entry[1] + 1
-            if zone in zones: # Compile zone stats
-                duration = entry[2]     
-                runTimes[zone]['totalRunTime'] += duration
-                if entry[3] > runTimes[zone]['lastRunTime']: # zone run more recent last stored
-                    runTimes[zone]['lastRunTime'] = entry[3]
-        
+            try:
+                if (entry[0] == 0): # special event record, not a run log
+                    continue
+                zone = entry[1] + 1
+                if zone in zones: # Compile zone stats
+                    duration = entry[2]     
+                    runTimes[zone]['totalRunTime'] += duration
+                    if entry[3] > runTimes[zone]['lastRunTime']: # zone run more recent last stored
+                        runTimes[zone]['lastRunTime'] = entry[3]
+            except TypeError as e:
+                # Get traceback
+                import traceback
+                tb = traceback.format_exc()
+
+                message = "OSPIInterface - An error occurred of type " + type(e).__name__ + " " + str(log_r.text) + " " + str(startTime) + " " + str(endTime)
+                raise ModuleException(message, e, tb)
+                
         return runTimes             
     
     def updateProgram(self, zoneNum, durationSec, runTimeEpoch):
