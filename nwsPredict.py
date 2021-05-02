@@ -1,5 +1,5 @@
 from weatherPredict import WeatherPredict
-import time, datetime, requests
+import datetime, requests
 import xml.etree.ElementTree as ET
 from exceptions import ModuleException, BasicException
 
@@ -21,8 +21,8 @@ class NWSPredict(WeatherPredict):
     # precipProb- array of epoch time and and chance of precipitation for every day between start and end times
         try:
             # Pull forecast data from source server
-            beginTimeString = datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%dT%H:%M:%S') 
-            endTimeString = datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%dT%H:%M:%S') 
+            beginTimeString = startTime.strftime('%Y-%m-%dT%H:%M:%S') 
+            endTimeString = endTime.strftime('%Y-%m-%dT%H:%M:%S') 
 
             payload = {'zipCodeList': location, 'product': 'time-series', 'begin': beginTimeString, 'end': endTimeString, 'pop12': 'pop12', 'qpf': 'qpf'} # 12-hour increment probability of precipitation and liquid precipitation amount
 
@@ -82,8 +82,7 @@ class NWSPredict(WeatherPredict):
                 #timeStr = prob_times[i][0][:-6] # strip time zone offset
                 #day = datetime.datetime.strptime(timeStr, '%Y-%m-%dT%H:%M:%S').strftime('%d')
                 timeStr = prob_times[i][0][0:10] # only interested in day
-                day = time.mktime(time.strptime(timeStr, "%Y-%m-%d"))
-                day = int(round(day))
+                day = datetime.datetime.strptime(timeStr, "%Y-%m-%d")
             
                 if (not currentDay): # first day
                     currentDay = day

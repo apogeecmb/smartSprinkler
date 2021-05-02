@@ -1,5 +1,6 @@
 from sprinklerInterface import SprinklerInterface
 import time
+from datetime import datetime
 import requests
 import hashlib
 from exceptions import ModuleException, BasicException
@@ -24,7 +25,7 @@ class OSPiInterface(SprinklerInterface):
             runTimes.update({zone: {'totalRunTime': 0, 'lastRunTime': 0}})  
    
         # Retrieve log from OSPi
-        log_r = requests.get(self.path + "jl", params = {'pw': self.pw, 'start': str(int(startTime)), 'end': str(int(endTime))})
+        log_r = requests.get(self.path + "jl", params = {'pw': self.pw, 'start': str(int(datetime.timestamp(startTime))), 'end': str(int(datetime.timestamp(endTime)))})
         # TODO put in result processing based on API information - need to check if json response or requested array of log times
         logEntries = log_r.json()
         
@@ -73,8 +74,15 @@ class OSPiInterface(SprinklerInterface):
         zoneId = self.getZoneId(zoneNum) 
         
         progSettings = str([self.programFlag-1, 1, 0, [0, -1, -1, -1], [int(0)]*self.numZones]).replace(" ", "") 
-        r_disableProgram = requests.get(self.path + "cp", params = {'pid': str(zoneId), 'name': "Zone" + str(zoneNum), 'pw': self.pw, 'v': progSettings})
+        try:
+            r_disableProgram = requests.get(self.path + "cp", params = {'pid': str(zoneId), 'name': "Zone" + str(zoneNum), 'pw': self.pw, 'v': progSettings})
+        except ConnectionError as e:
+            import traceback
+            tb = traceback.format_exc()
 
+            message = "OSPIInterface - An error occurred of type " + type(e).__name__ + " " + str(log_r.text) + " " + str(startTime) + " " + str(endTime)
+            raise ModuleException(message, e, tb)
+        
     def getZoneId(self, zoneNum):
         return zoneNum-1
 

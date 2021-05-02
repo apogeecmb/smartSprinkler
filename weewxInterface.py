@@ -1,5 +1,6 @@
 from pwsInterface import PWSInterface
 from exceptions import ModuleException
+from datetime import datetime
 import sqlite3 # sqlite3 module
 
 class WeeWXInterface(PWSInterface):
@@ -15,7 +16,7 @@ class WeeWXInterface(PWSInterface):
             c = conn.cursor() # cursor to operate on database
 
             # Get rainfall table from database
-            c.execute('SELECT * FROM archive_day_rain WHERE dateTime BETWEEN ? AND ?', (startTime, endTime))
+            c.execute('SELECT * FROM archive_day_rain WHERE dateTime BETWEEN ? AND ?', (datetime.timestamp(startTime), datetime.timestamp(endTime)))
 
             rainTable = c.fetchall()
 
@@ -36,5 +37,5 @@ class WeeWXInterface(PWSInterface):
             message = "WeeWXInterface - An error occurred of type " + type(e).__name__
             raise ModuleException(message, e, tb)
         
-        return rainfall, lastDayOfRain 
+        return rainfall, lastDayOfRain
 
