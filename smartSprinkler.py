@@ -2,6 +2,7 @@ import time # time module
 import datetime
 import json
 import math
+import copy
 from enum import IntEnum
 from astral import Location
 from exceptions import ModuleException, BasicException
@@ -107,6 +108,79 @@ class SmartSprinkler(object):
     def __init__(self, configSettings):
         self.config = SmartSprinklerConfig(configSettings)
 
+    def calculateWeeklyWaterAvg(self, startOfCurWeek, sprinklerLog):
+    # Calculate average weekly water total over desired averaging period
+        
+        # Calculate water total for each week
+        weeklyTotals = [0] * (self.config['avgWeeks'] - 1)
+        avgTotals = [0] * len(self.config['zones'])
+        for week in range(1, self.config['avgWeeks']): # calculate water totals for previous weeks
+            weekStart = startOfCurWeek - datetime.timedelta(days=7*week)
+            weekEnd = weekStart + datetime.timedelta(days=7)
+
+            _, _, _, weeklyTotals[i-1] = self.getWaterForPeriod(weekStart, weekEnd, sprinklerLog)
+
+            # Calculate average water per week
+            avgTotals = [avgTotals[zone] + weeklyTotals[i-1][zone] / (self.config['avgWeeks'] - 1) for zone in range(len(self.config['zones']))]
+        
+        return avgTotals
+
+    def getTotalWaterForPeriod(self, startTime, endTime, sprinklerLog):
+    # Calculate the total water (rain and sprinklers) for the requested time period 
+        
+        # Calculate total rain
+        if (self.config.pws):
+            try:
+                # Get rainfall total
+                rainTotal, lastTimeRain = self.config.pws.getRainfall(startTime, endTime, self.config['minRainAmount'])
+                
+            except ModuleException as err: # fatal error
+                raise err
+        else:
+            rainTotal = 0.0
+            lastTimeRain = 0.0
+        
+        # Calculate sprinkler time for this period
+        if (self.config.sprinklerInterface):
+            #syslog.syslog("sprinkler total lookup time:" + str(epochTimeBeginWeek))
+            try:
+                sprinklerTotal = self.config.sprinklerInterface.getSprinklerTotals(self.config['zones'], startTime, endTime, log=sprinklerLog)
+            except BasicException as err:
+                raise err
+                #nonFatalException = err # store exception and continue    
+            except ModuleException as err:
+                raise err
+            except Exception as err:
+                raise err
+                #nonFatalException = err # store exception and continue    
+
+        else:
+            sprinklerTotal = dict()
+            for zone in zones:
+                sprinklerTotal.update({zone: {'totalRunTime': 0, 'lastRunTime': 0}})  
+
+        # Total water for this period by zone (rain and sprinklers)
+        totalWater = [rainTotal + sprinklerTotal[self.config['zones'][i]]['totalRunTime']/60.0*self.config['zoneWateringRate'][i] for i in range(len(self.config['zones']))]
+        
+        return rainTotal, lastTimeRain, sprinklerTotal, totalWater
+        
+    def calculateWateringRequired(self, startOfCurWeek, sprinklerLog):
+    # Calculate how much water is required this week
+
+        # Calculate total water over averaging period
+        endTime = startOfCurWeek
+        startTime = endTime - datetime.timedelta(days=7*(self.config['avgWeeks']-1))
+        _, _, _, totalWater = self.getTotalWaterForPeriod(startTime, endTime, sprinklerLog)
+        print("Total water over averaging period:", totalWater, startTime, endTime)
+ 
+        # Calculate water required this week to meet desired watering over average period
+        wateringReq = [0] * len(self.config['zones'])
+        for zone in range(len(wateringReq)):
+            desiredWaterTotal = self.config['avgWeeks'] * self.config['weeklyWaterReq'][zone]
+            wateringReq[zone] = desiredWaterTotal - totalWater[zone] # desired total minus actual water received 
+            print("Calculated water required:", zone, desiredWaterTotal, wateringReq[zone])
+        return wateringReq
+
     def runSprinklerLogic(self, sprinklerLog):
         nonFatalException = None    
 
@@ -134,85 +208,30 @@ class SmartSprinkler(object):
             return
 
         weeklyWaterReq = self.config['weeklyWaterReq']
-    
+   
         # Determine important times (does not account for DST)
         currentTime = datetime.datetime.now()
-        midnight = datetime.datetime(currentTime.year, currentTime.month, currentTime.day)
-        dayOfWeek = (midnight.weekday() + 1) % 7
-
-        beginWeek = midnight - datetime.timedelta(days=dayOfWeek) # start week on Sunday
-        midWeek = beginWeek + datetime.timedelta(days=3) # midweek epoch for splitting up long watering times
-        endWeek = beginWeek + datetime.timedelta(days=7, seconds=-30) # subtraction of 30 seconds ensures end time is part of same week
-        lastDayOfWeek = datetime.datetime(endWeek.year, endWeek.month, endWeek.day) # start of last day of week
-        startLastWeek = beginWeek - datetime.timedelta(days=7)
-
-        ### Get watering/rain statistics
-        # Calculate total rain this week and last
-        if (self.config.pws):
-            try:
-                # Get rainfall total this week
-                rainfall, lastTimeOfRain = self.config.pws.getRainfall(beginWeek, endWeek, self.config['minRainAmount'])
-                # Get rainfall total for previous week 
-                lastWeekRain, timeRainLastWeek = self.config.pws.getRainfall(startLastWeek, beginWeek, self.config['minRainAmount'])
-            except ModuleException as err: # fatal error
-                raise err
-        else:
-            rainfall = 0.0
-            lastTimeOfRain = 0.0
-            lastWeekRain = 0.0
-            timeRainLastWeek = 0.0
+        midnightToday = datetime.datetime(currentTime.year, currentTime.month, currentTime.day)
+        currentDayOfWeek = (midnightToday.weekday() + 1) % 7
+        startOfCurWeek = midnightToday - datetime.timedelta(days=currentDayOfWeek) # start week on Sunday
+        midWeek = startOfCurWeek + datetime.timedelta(days=3) # midweek epoch for splitting up long watering times
+        endOfCurWeek = startOfCurWeek + datetime.timedelta(days=7, seconds=-30) # subtraction of 30 seconds ensures end time is part of same week
+        lastDayOfWeek = datetime.datetime(endOfCurWeek.year, endOfCurWeek.month, endOfCurWeek.day) # start of last day of week
         
-        print("Rainfall this week: ", rainfall, lastTimeOfRain)
+        # Total water this week
+        _, _, _, totalWaterThisWeek = self.getTotalWaterForPeriod(startOfCurWeek, endOfCurWeek, sprinklerLog)
         
-        if (rainfall < 0.0):
-            rainfall = 0.0
+        # Calculate watering required
+        waterRequired = self.calculateWateringRequired(startOfCurWeek, sprinklerLog)
+        print("Water required:", waterRequired)
 
-        # Calculate sprinkler time this week
-        if (self.config.sprinklerInterface):
-            #syslog.syslog("sprinkler total lookup time:" + str(epochTimeBeginWeek))
-            try:
-                sprinklerTable = self.config.sprinklerInterface.getSprinklerTotals(self.config['zones'], beginWeek, currentTime, log=sprinklerLog)
-                lastSprinklerTable = self.config.sprinklerInterface.getSprinklerTotals(self.config['zones'], startLastWeek, beginWeek, log=sprinklerLog)
-            except BasicException as err:
-                raise err
-                #nonFatalException = err # store exception and continue    
-            except ModuleException as err:
-                raise err
-            except Exception as err:
-                raise err
-                #nonFatalException = err # store exception and continue    
+        # Determine last day of rain or water
+        startOfLastWeek = startOfCurWeek - datetime.timedelta(days=7) 
+        _, lastTimeRain, sprinklerTotal, _ = self.getTotalWaterForPeriod(startOfLastWeek, currentTime, sprinklerLog)
 
-        else:
-            sprinklerTable = dict()
-            for zone in zones:
-                sprinklerTable.update({zone: {'totalRunTime': 0, 'lastRunTime': 0}})  
-            lastSprinklerTable = sprinklerTable
+        lastTimeWater = [datetime.datetime.fromtimestamp(max(lastTimeRain, sprinklerTotal[zone]['lastRunTime'])) for zone in sprinklerTotal]
+        print("Last time water:", lastTimeWater)
 
-        # Total water by zone (rainfall and sprinklers)
-        totalWater = [rainfall + sprinklerTable[self.config['zones'][i]]['totalRunTime']/60.0*self.config['zoneWateringRate'][i] for i in range(len(self.config['zones']))]
-    
-        # Check for time since last rain or water
-        if (timeRainLastWeek > lastTimeOfRain): # no rain this week, but rained last 
-            lastTimeOfRain = timeRainLastWeek
-    
-        totalWaterLastWeek = [lastSprinklerTable[self.config['zones'][i]]['totalRunTime']/60.0*self.config['zoneWateringRate'][i] + lastWeekRain for i in range(len(self.config['zones']))] # total water last week by zone
-        print(totalWaterLastWeek)
-        # Add past week excess water to this week's total
-        if (self.config['excessRollover'] or self.config['deficitMakeup']):  
-            for i in range(len(totalWaterLastWeek)):
-                if (self.config['excessRollover'] and totalWaterLastWeek[i] > weeklyWaterReq[i]): # add excess amount
-                    totalWater[i] += totalWaterLastWeek[i] - weeklyWaterReq[i]
-                if (self.config['deficitMakeup'] and totalWaterLastWeek[i] < weeklyWaterReq[i]): # add shortage amount to this week's requirement
-                    deficit = weeklyWaterReq[i] - totalWaterLastWeek[i]
-                    print("Making up deficit for zone {} - {} in".format(i+1, deficit))
-                    weeklyWaterReq[i] += deficit
-
-        print("Total water this week:", totalWater)
-
-        # Calculate last day of rain or water
-        lastTimeWater = [datetime.datetime.fromtimestamp(max(lastTimeOfRain,sprinklerTable[zone]['lastRunTime'],lastSprinklerTable[zone]['lastRunTime'])) for zone in sprinklerTable]
-        print(lastTimeWater)
-    
         ### Update watering times
         wateringLength = [0]*len(self.config['zones'])
         nextDayToWater = [0]*len(self.config['zones'])
@@ -223,7 +242,7 @@ class SmartSprinkler(object):
         precipProb = []
         if (self.config.weatherPredict):
             try:    
-                precipProb = self.config.weatherPredict.getPrecipProb(currentTime, endWeek, self.config['location']['zipcode'])
+                precipProb = self.config.weatherPredict.getPrecipProb(currentTime, endOfCurWeek, self.config['location']['zipcode'])
             except BasicException as err:
                 nonFatalException = err # store exception and continue    
             except ModuleException as err:
@@ -236,8 +255,8 @@ class SmartSprinkler(object):
             if (currentTime > lastDayOfWeek): # last day of week so force sprinkler run
                 runNow = True
 
-            nextDayToWater[zone], amountToWater, status[zone], runTime, timeChoice = self.getWateringUpdate(zone, totalWater[zone], lastTimeWater[zone], weeklyWaterReq[zone], self.config, beginWeek, endWeek, runNow, precipProb)
-    
+            nextDayToWater[zone], amountToWater, status[zone], runTime, timeChoice = self.getWateringUpdate(zone, totalWaterThisWeek[zone], lastTimeWater[zone], waterRequired[zone], self.config, startOfCurWeek, endOfCurWeek, runNow, precipProb)
+            
             if amountToWater > 0: # need to run sprinklers in this zone
                 ## Determine run time
                 wateringLength[zone] = math.ceil(amountToWater/self.config['zoneWateringRate'][zone]*60.0) # requested length (seconds)
@@ -264,8 +283,8 @@ class SmartSprinkler(object):
                     self.config.sprinklerInterface.disableProgram(self.config['zones'][zone])
 
             # Check for watering requirement exceeding maximum run length
-            if ((weeklyWaterReq[zone] - totalWater[zone]) / self.config['zoneWateringRate'][zone] > self.config['maxWateringLength'][zone]): # schedule watering of excess
-                excessAmount = (weeklyWaterReq[zone] - totalWater[zone]) / self.config['zoneWateringRate'][zone] - self.config['maxWateringLength'][zone] # water excess over max length
+            if ((weeklyWaterReq[zone] - totalWaterThisWeek[zone]) / self.config['zoneWateringRate'][zone] > self.config['maxWateringLength'][zone]): # schedule watering of excess
+                excessAmount = (weeklyWaterReq[zone] - totalWaterThisWeek[zone]) / self.config['zoneWateringRate'][zone] - self.config['maxWateringLength'][zone] # water excess over max length
                 if (newRun): # update existing schedule run
                     newRun[2] = max(newRun[2], excessAmount) # update amount
                     if (currentTime < midWeek): # update time
@@ -284,8 +303,6 @@ class SmartSprinkler(object):
             if (newRun): # add run to list
                 runData.append(newRun)
                 
-            
-
         print("Watering lengths: " + str(wateringLength))
 
         # Modify sprinkler programs 
@@ -313,7 +330,7 @@ class SmartSprinkler(object):
                     self.config.sprinklerInterface.disableProgram(self.config['zones'][i])
 
         # Log execution data
-        logEntry = self.logStatus(self.config['logFile'], self.config['statusFile'], status, runData, totalWater, lastTimeWater)
+        logEntry = self.logStatus(self.config['logFile'], self.config['statusFile'], status, runData, totalWaterThisWeek, lastTimeWater)
         
         # Report status
         if (self.config.reportInt and self.config['reportEnable'] != ReportEnable.Disable):
@@ -384,7 +401,7 @@ class SmartSprinkler(object):
 
     def getWateringUpdate(self, zone, amountOfWater, lastTimeWater, weeklyWaterReq, config, startTime, endTime, runNow, precipProb): 
         """Calculate watering needs based on water to date and predicted weather."""
-
+        print(zone, amountOfWater, weeklyWaterReq)
         ## Calculate next watering day
         nextDayToWater = -1
         amountToWater = -1
