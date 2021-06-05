@@ -255,10 +255,11 @@ class SmartSprinkler(object):
             if (currentTime > lastDayOfWeek): # last day of week so force sprinkler run
                 runNow = True
 
+            # Determine amount to water (in inches) and when to run sprinklers for zone, accounting for predicted weather
             nextDayToWater[zone], amountToWater, status[zone], runTime, timeChoice = self.getWateringUpdate(zone, totalWaterThisWeek[zone], lastTimeWater[zone], waterRequired[zone], self.config, startOfCurWeek, endOfCurWeek, runNow, precipProb)
             
             if amountToWater > 0: # need to run sprinklers in this zone
-                ## Determine run time
+                ## Determine run duration
                 wateringLength[zone] = math.ceil(amountToWater/self.config['zoneWateringRate'][zone]*60.0) # requested length (seconds)
                 # Do bounds checking
                 wateringLength[zone] = max(wateringLength[zone], self.config['minWateringLength'][zone]) # lower bound
@@ -410,7 +411,7 @@ class SmartSprinkler(object):
         timeChoice = 'first'
 
         # Check if water requirement met
-        if (amountOfWater > 0.9*weeklyWaterReq): # within 10% of requirement
+        if (weeklyWaterReq <= 0 or amountOfWater > 0.9*weeklyWaterReq): # within 10% of requirement
             print("Water requirement met for zone {}.".format(zone+1))
         else:
             print("Water requirement not met for zone {}. Determining next day to water.".format(zone+1))
