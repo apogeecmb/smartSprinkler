@@ -30,6 +30,15 @@ class OSPiInterface(SprinklerInterface):
         logEntries = log_r.json()
         
         # Parse and format log entries
+        try: # check for result code
+            if ('result' in logEntries):
+                if (logEntries['result'] == 17): # date is out of range
+                    raise ModuleException("OSPIInterface - Date range is not valid. Provided start time/end time: {}, {}".format(startTime, endTime), None, None) 
+        except ModuleException as e:
+            raise e
+        except Exception as e:
+            pass
+        
         for entry in logEntries:
             try:
                 if (entry[0] == 0): # special event record, not a run log

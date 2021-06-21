@@ -207,7 +207,7 @@ class SmartSprinkler(object):
 
             return
 
-        weeklyWaterReq = self.config['weeklyWaterReq']
+        waterRequired = self.config['weeklyWaterReq']
    
         # Determine important times (does not account for DST)
         currentTime = datetime.datetime.now()
@@ -220,9 +220,29 @@ class SmartSprinkler(object):
         
         # Total water this week
         _, _, _, totalWaterThisWeek = self.getTotalWaterForPeriod(startOfCurWeek, endOfCurWeek, sprinklerLog)
-        
-        # Calculate watering required
-        waterRequired = self.calculateWateringRequired(startOfCurWeek, sprinklerLog)
+       
+        # Check for excess or deficit Get total water the previous week
+        if (self.config['excessRollover'] or self.config['deficitMakeup']):
+            # Determine water previous week
+            if (self.config['excessRollover'] and self.config['deficitMakeup']):
+                # Calculate previous week's water as average of previous 2 weeks to avoid feedback loop
+                _, _, _, totalWaterLastWeek = self.getTotalWaterForPeriod(startOfCurWeek - datetime.timedelta(days=14), startOfCurWeek, sprinklerLog)
+                totalWaterLastWeek = [zoneWater/2.0 for zoneWater in totalWaterLastWeek]
+
+            else:
+                _, _, _, totalWaterLastWeek = self.getTotalWaterForPeriod(startOfCurWeek - datetime.timedelta(days=7), startOfCurWeek, sprinklerLog)
+
+            # Calculate excess or deficit
+            waterAdj = [0]*len(totalWaterLastWeek)
+            for zone in range(len(totalWaterLastWeek)):
+                waterDelta = totalWaterLastWeek[zone] - waterRequired[zone]
+                if (self.config['excessRollover'] and waterDelta > 0):
+                    waterAdj[zone] -= waterDelta # subtract excess from watering requirement
+                elif (self.config['deficitMakeup'] and waterDelta < 0):
+                    waterAdj[zone] += waterDelta # add deficit to watering requirement
+
+            waterRequired = [req + adj for req, adj in zip(waterRequired, waterAdj)] 
+
         print("Water required:", waterRequired)
 
         # Determine last day of rain or water
@@ -284,8 +304,8 @@ class SmartSprinkler(object):
                     self.config.sprinklerInterface.disableProgram(self.config['zones'][zone])
 
             # Check for watering requirement exceeding maximum run length
-            if ((weeklyWaterReq[zone] - totalWaterThisWeek[zone]) / self.config['zoneWateringRate'][zone] > self.config['maxWateringLength'][zone]): # schedule watering of excess
-                excessAmount = (weeklyWaterReq[zone] - totalWaterThisWeek[zone]) / self.config['zoneWateringRate'][zone] - self.config['maxWateringLength'][zone] # water excess over max length
+            if ((waterRequired[zone] - totalWaterThisWeek[zone]) / self.config['zoneWateringRate'][zone] > self.config['maxWateringLength'][zone]): # schedule watering of excess
+                excessAmount = (waterRequired[zone] - totalWaterThisWeek[zone]) / self.config['zoneWateringRate'][zone] - self.config['maxWateringLength'][zone] # water excess over max length
                 if (newRun): # update existing schedule run
                     newRun[2] = max(newRun[2], excessAmount) # update amount
                     if (currentTime < midWeek): # update time
