@@ -14,7 +14,7 @@ def execute(settings=[], settingsFile=[], sprinklerLog=[]):
         sys.exit()
 
     try:     
-        smartSprinkler = SmartSprinkler(settings)
+        smartSprinkler = SmartSprinkler(settings, sprinklerLog)
     except ModuleException as err:
         errString = err.message + ": " + str(err.exception) + "\nTraceback: " + str(err.traceback)
         print(errString)
@@ -24,7 +24,7 @@ def execute(settings=[], settingsFile=[], sprinklerLog=[]):
         sys.exit()
 
     try:
-        smartSprinkler.runSprinklerLogic(sprinklerLog)
+        smartSprinkler.runSprinklerLogic()
     except ModuleException as err:
         # Report error
         errString = err.message + ": " + str(err.exception) + "\nTraceback: " + str(err.traceback)

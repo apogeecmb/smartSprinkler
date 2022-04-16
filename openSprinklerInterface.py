@@ -10,7 +10,7 @@ class OSPiInterface(SprinklerInterface):
     # https://openthings.freshdesk.com/support/solutions/articles/5000716363-os-api-documents
 
     def __init__(self, path, numZones, pw):
-        super().__init__(path, numZones)
+        super().__init__(path, numZones, [])
 
         # Store password for api calls
         self.pw = hashlib.md5(pw.encode('utf-8')).hexdigest() 
@@ -18,7 +18,7 @@ class OSPiInterface(SprinklerInterface):
         # Sprinkler program settings
         self.programFlag = 65 # enabled, weekday program schedule, fixed start time
 
-    def getSprinklerTotals(self, zones, startTime, endTime, log=[]):
+    def getSprinklerTotals(self, zones, startTime, endTime):
         # Initialize output
         runTimes = dict()
         for zone in zones:

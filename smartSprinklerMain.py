@@ -1,7 +1,7 @@
 import yaml
 from smartSprinklerExecute import execute
 
-with open("smartSprinkler/smartSprinkler.yaml") as f:
+with open("smartSprinkler.yaml") as f:
     config = yaml.load(f, Loader=yaml.Loader)
 
 # Execute SmartSprinkler logic
