@@ -231,13 +231,15 @@ class SmartSprinkler(object):
                         
             # Log status and exit
             timestamp = time.strftime("%H:%M:%S %m-%d-%Y")
-            try:
-                with open(self.config['logFile'], "a") as f:
+            #try:
+                #with open(self.config['logFile'], "a") as f:
                     # Write entry to log
-                    logEntry = "{} - Status: Sprinklers currently disabled.".format(timestamp)
-                    f.write("\n" + logEntry)
-            except:
-                pass 
+            logEntry = {"timestamp": timestamp, "statusMsg": "Sprinklers currently disabled."}
+            self.writeLogEntry(logEntry)
+                    #logEntry = "{} - Status: Sprinklers currently disabled.".format(timestamp)
+                    #f.write("\n" + logEntry)
+            #except:
+            #    pass 
 
             return
 
@@ -273,7 +275,7 @@ class SmartSprinkler(object):
                 if (self.config['excessRollover'] and waterDelta > 0):
                     waterAdj[idx] -= waterDelta # subtract excess from watering requirement
                 elif (self.config['deficitMakeup'] and waterDelta < 0):
-                    waterAdj[idx] += waterDelta # add deficit to watering requirement
+                    waterAdj[idx] += -waterDelta # add deficit to watering requirement
 
             waterRequired = [req + adj for req, adj in zip(waterRequired, waterAdj)] 
 
@@ -282,7 +284,7 @@ class SmartSprinkler(object):
         # Determine last day of rain or water
         startOfLastWeek = startOfCurWeek - datetime.timedelta(days=7) 
         _, lastTimeRain, sprinklerTotal, _ = self.getTotalWaterForPeriod(startOfLastWeek, currentTime)
-
+        print(lastTimeRain, sprinklerTotal)
         lastTimeWater = [datetime.datetime.fromtimestamp(max(lastTimeRain, sprinklerTotal[zone]['lastRunTime'])) for zone in sprinklerTotal]
         print("Last time water:", lastTimeWater)
 
@@ -393,7 +395,8 @@ class SmartSprinkler(object):
                     self.config.sprinklerInterface.disableProgram(self.config['zones'][i])
 
         # Log execution data
-        logEntry = self.logStatus(self.config['logFile'], self.config['statusFile'], status, runData, totalWaterThisWeek, lastTimeWater)
+        print(totalWaterThisWeek)
+        logEntry = self.logStatus(self.config['logFile'], self.config['statusFile'], status, runData, totalWaterThisWeek, lastTimeWater, waterRequired)
         
         # Report status
         if (self.config.reportInt and self.config['reportEnable'] != ReportEnable.Disable):
@@ -541,38 +544,31 @@ class SmartSprinkler(object):
 
         return nextDayToWater, amountToWater, status, runTime, timeChoice
 
-    def logStatus(self, logfile, statusfile, status, runData, totalWater, lastTimeWater):
+    def logStatus(self, logfile, statusfile, status, runData, totalWater, lastTimeWater, waterRequired):
         timestamp = time.strftime("%H:%M:%S %m-%d-%Y")
-    
+
+        logEntry = None   
+ 
         # Log to cumulative log file
         try:
-            with open(logfile, "a") as f:
-                # Format data for log entry
-                statusOut = []
-                for zone in status:
-                    statusOut.append(str(zone))
-                runDataOut = []
-                for zone in runData:
-                    timeStr = zone[0].strftime("%H:%M:%S %m-%d-%Y")
-                    runDataOut.append([timeStr, zone[1], zone[2]])
+            statusOut = []
+            for zone in status:
+                statusOut.append(str(zone))
+            runDataOut = {}
+            for zone in runData:
+                timeStr = zone[0].strftime("%H:%M:%S %m-%d-%Y")
+                runDataOut[zone[1]] = {'runTime': timeStr, 'runDuration': zone[2]}
 
-                # Write entry to log
-                logEntry = timestamp + " - " + "Status: " + str(statusOut) + ", Scheduled runs (start time, program number, zone, length): " + str(runDataOut) + ", Total water: " + str(totalWater) + ", Last time water: " + str(lastTimeWater)
-                f.write("\n" + logEntry)
-                return logEntry
+            # Write entry to log
+            lastTimeWaterStrs = [dt.strftime("%m-%d-%Y") for dt in lastTimeWater] 
+            logEntry = {'timestamp': timestamp, 'zoneStatus': statusOut, 'runs': runDataOut, 'totalWater': totalWater, 'lastTimeWater': lastTimeWaterStrs, 'waterRequired': waterRequired}
+            self.writeLogEntry(logEntry)  
+        
         except Exception as e:
-            return None
-    
-        # Log to current status file
-        try:
-            with open(statusfile, "w") as f:
-                statusOut = []
-                for entry in status:
-                    print(entry)
-                    statusOut.append(int(entry))
-                currentStatus = {"timestamp": timestamp, "status": statusOut, "totalWater": totalWater, "lastTimeWater": lastTimeWater, "lastRun": timestamp}
-                print(currentStatus)
-                json.dump(currentStatus, f)         
-        except:
-            pass    
-    
+            pass
+        
+        return logEntry
+   
+    def writeLogEntry(self, logEntry):
+        with open(self.config['logFile'], "a") as f:
+            f.write(json.dumps(logEntry) + "\n")
